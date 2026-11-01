@@ -4,7 +4,7 @@ import {handlePublicRequest,validateSubmission,deliverNotification} from '../wor
 const url='https://admin.example.com/public-api/requests';
 const fields={email:' person@example.com ',reason:'Please let me access the private collection.',token:'test-token',website:''};
 const request=(body=fields,origin='https://admin.example.com')=>new Request(url,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
-function env(){return {TURNSTILE_SECRET_KEY:'test',TURNSTILE_SITE_KEY:'test',RESEND_API_KEY:'test',EMAIL_FROM:'test@example.com',DB:{prepare(sql){return {bind(...values){return {sql,values,first:async()=>null};}}},batch:async()=>{}}};}
+function env(){return {TURNSTILE_SECRET_KEY:'test-secret-key',TURNSTILE_SITE_KEY:'test-site-key',RESEND_API_KEY:'test',EMAIL_FROM:'test@example.com',DB:{prepare(sql){return {bind(...values){return {sql,values,first:async()=>null};}}},batch:async()=>{}}};}
 test('submission validates email and reason',()=>{
  assert.equal(validateSubmission({...fields,email:'bad'}),null);
  assert.equal(validateSubmission({...fields,reason:'short'}),null);
@@ -49,4 +49,20 @@ test('missing mail settings do not discard a verified request or its durable not
  e.DB.batch=async values=>{statements=values;return [{meta:{changes:1},results:[{id:2}]},{meta:{changes:1}}];};
  const response=await handlePublicRequest(request(),e,{waitUntil:promise=>tasks.push(promise)});
  assert.equal(response.status,201);assert.equal(statements.length,2);assert.match(statements[1].sql,/notification_outbox/);await Promise.all(tasks);
+});
+test('secret is sent trimmed and form-encoded without leaking it in diagnostics',async(t)=>{
+ const logs=[];t.mock.method(console,'error',value=>logs.push(value));let submitted;
+ t.mock.method(globalThis,'fetch',async(url,options)=>{submitted=options;return Response.json({'success':false,'error-codes':['invalid-input-secret']},{status:400});});
+ const e=env();e.TURNSTILE_SECRET_KEY=' private-secret-value \n';
+ const response=await handlePublicRequest(request(),e,{});
+ assert.equal(response.status,503);assert.equal((await response.json()).code,'TURNSTILE_SECRET_INVALID');assert.equal(submitted.headers['Content-Type'],'application/x-www-form-urlencoded');assert.equal(new URLSearchParams(submitted.body).get('secret'),'private-secret-value');assert.ok(!JSON.stringify(logs).includes('private-secret-value'));
+});
+test('a copied site key cannot be mistaken for its secret key',async(t)=>{
+ t.mock.method(console,'error',()=>{});let contacted=false;t.mock.method(globalThis,'fetch',async()=>{contacted=true;return Response.json({});});
+ const e=env();e.TURNSTILE_SECRET_KEY=e.TURNSTILE_SITE_KEY;
+ const response=await handlePublicRequest(request(),e,{});assert.equal(response.status,503);assert.equal((await response.json()).code,'TURNSTILE_SECRET_IS_SITE_KEY');assert.equal(contacted,false);
+});
+test('non-JSON upstream errors produce safe diagnostic status instead of a parsing exception',async(t)=>{
+ t.mock.method(console,'error',()=>{});t.mock.method(globalThis,'fetch',async()=>new Response('<html>Unavailable</html>',{status:502}));
+ const response=await handlePublicRequest(request(),env(),{});const body=await response.json();assert.equal(response.status,503);assert.equal(body.verificationStatus,502);assert.equal(body.code,'TURNSTILE_UPSTREAM_ERROR');
 });

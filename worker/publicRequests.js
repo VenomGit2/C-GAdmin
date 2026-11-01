@@ -53,11 +53,27 @@ export async function handlePublicRequest(request,env,ctx) {
  if (!fields) return json({error:'Enter a valid email and a reason between 10 and 2,000 characters.'},400);
  if (body.website || typeof body.token!=='string' || !body.token || body.token.length>2048) return json({error:'Please complete the spam verification.'},400);
  try {
-  const verification = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({secret:env.TURNSTILE_SECRET_KEY,response:body.token,remoteip:request.headers.get('CF-Connecting-IP') || undefined}),signal:AbortSignal.timeout(10000)});
-  if (!verification.ok) return json({error:'Spam verification unavailable. Please retry.'},503);
-  const result = await verification.json();
-  if (!result.success || result.hostname!==url.hostname || result.action!=='request-access') return json({error:'Verification expired or failed. Please try again.'},400);
-  const saved=await saveNewRequest(env,{email:fields.email,reason:fields.reason});
+  const secret=String(env.TURNSTILE_SECRET_KEY).trim();
+  if(secret===String(env.TURNSTILE_SITE_KEY).trim()){
+   console.error(JSON.stringify({event:'turnstile_configuration_error',code:'secret-is-site-key'}));
+   return json({error:'Spam protection needs an administrator update. Please try again later.',code:'TURNSTILE_SECRET_IS_SITE_KEY'},503);
+  }
+  const form=new URLSearchParams({secret,response:body.token});
+  const ip=request.headers.get('CF-Connecting-IP');if(ip)form.set('remoteip',ip);
+  const verification=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form,signal:AbortSignal.timeout(10000)});
+  let result;try{result=await verification.json();}catch{result={};}
+  const knownErrors=new Set(['missing-input-secret','invalid-input-secret','missing-input-response','invalid-input-response','bad-request','timeout-or-duplicate','internal-error']);
+  const errorCodes=Array.isArray(result?.['error-codes'])?result['error-codes'].slice(0,8).map(value=>knownErrors.has(value)?value:'unknown-error'):[];
+  if(!verification.ok || result?.success!==true){
+   console.error(JSON.stringify({event:'turnstile_verification_failed',httpStatus:verification.status,errorCodes}));
+   if(errorCodes.some(value=>value==='invalid-input-secret' || value==='missing-input-secret'))return json({error:'Spam protection needs an administrator update. Please try again later.',code:'TURNSTILE_SECRET_INVALID'},503);
+   if(!verification.ok || errorCodes.includes('internal-error'))return json({error:'Spam verification unavailable. Please retry.',code:'TURNSTILE_UPSTREAM_ERROR',verificationStatus:verification.status,errorCodes},503);
+   return json({error:'Verification expired or failed. Please try again.',code:'TURNSTILE_TOKEN_INVALID'},400);
+  }
+  if(result.hostname!==url.hostname || result.action!=='request-access'){
+   console.error(JSON.stringify({event:'turnstile_context_mismatch',hostnameMatches:result.hostname===url.hostname,actionMatches:result.action==='request-access'}));
+   return json({error:'Verification expired or failed. Please try again.'},400);
+  }  const saved=await saveNewRequest(env,{email:fields.email,reason:fields.reason});
   if (!saved.inserted) return json({error:'A request already exists for this email. Please wait for review or contact the administrator.'},409);
   ctx.waitUntil(deliverNotification(env,saved.notificationId));
   return json({id:saved.id,status:'Pending'},201);
