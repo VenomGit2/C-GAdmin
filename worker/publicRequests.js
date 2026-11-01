@@ -42,7 +42,11 @@ export async function handlePublicRequest(request,env,ctx) {
  if (url.pathname!=='/public-api/requests') return json({error:'Not found.'},404);
  if (request.method!=='POST') return json({error:'Method not allowed.'},405);
  if (request.headers.get('Origin')!==url.origin || !request.headers.get('Content-Type')?.startsWith('application/json')) return json({error:'Invalid request.'},403);
- if (!env.DB || !env.TURNSTILE_SECRET_KEY || !env.TURNSTILE_SITE_KEY || !env.RESEND_API_KEY || !env.EMAIL_FROM) return json({error:'Requests are temporarily unavailable. Please try again later.'},503);
+ const missing=['DB','TURNSTILE_SECRET_KEY','TURNSTILE_SITE_KEY'].filter(name=>!env[name]);
+ if(missing.length){
+  console.error(JSON.stringify({event:'request_configuration_missing',missing}));
+  return json({error:'Requests are temporarily unavailable. Please try again later.'},503);
+ }
  const text = await request.text(); if (text.length>8192) return json({error:'Request too large.'},413);
  let body; try {body=JSON.parse(text);} catch {return json({error:'Invalid request.'},400);}
  const fields = validateSubmission(body);
@@ -57,5 +61,5 @@ export async function handlePublicRequest(request,env,ctx) {
   if (!saved.inserted) return json({error:'A request already exists for this email. Please wait for review or contact the administrator.'},409);
   ctx.waitUntil(deliverNotification(env,saved.notificationId));
   return json({id:saved.id,status:'Pending'},201);
- } catch {return json({error:'Unable to submit your request. Please try again.'},503);}
+ } catch(error) {console.error(JSON.stringify({event:'request_submission_failed',errorType:error?.name || 'Error'}));return json({error:'Unable to submit your request. Please try again.'},503);}
 }

@@ -36,3 +36,17 @@ test('notification always targets administrator with a stable idempotency key',a
  const writes=[];const e=env();e.DB.prepare=sql=>({bind:(...values)=>({first:async()=>({id:'test-id',attempts:0,email:'person@example.com',purpose:'Access please',request_id:'CG-1'}),run:async()=>writes.push({sql,values})})});
  await deliverNotification(e,'test-id');assert.deepEqual(payload.to,['dnyaneshwar@circuitgrain.shop']);assert.equal(headers['Idempotency-Key'],'request-test-id');assert.match(writes[1].sql,/sent_at/);
 });
+
+test('missing configuration is identified by name without logging secret values',async(t)=>{
+ const logs=[];t.mock.method(console,'error',value=>logs.push(JSON.parse(value)));
+ const e=env();delete e.TURNSTILE_SECRET_KEY;
+ assert.equal((await handlePublicRequest(request(),e,{})).status,503);
+ assert.deepEqual(logs,[{event:'request_configuration_missing',missing:['TURNSTILE_SECRET_KEY']}]);
+});
+test('missing mail settings do not discard a verified request or its durable notification',async(t)=>{
+ t.mock.method(globalThis,'fetch',async()=>Response.json({success:true,hostname:'admin.example.com',action:'request-access'}));
+ const e=env();delete e.RESEND_API_KEY;delete e.EMAIL_FROM;let statements;const tasks=[];
+ e.DB.batch=async values=>{statements=values;return [{meta:{changes:1},results:[{id:2}]},{meta:{changes:1}}];};
+ const response=await handlePublicRequest(request(),e,{waitUntil:promise=>tasks.push(promise)});
+ assert.equal(response.status,201);assert.equal(statements.length,2);assert.match(statements[1].sql,/notification_outbox/);await Promise.all(tasks);
+});
