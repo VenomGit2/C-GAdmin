@@ -21,7 +21,7 @@
     "vars":  {
                  "ADMIN_EMAILS":  "insanedk46@gmail.com",
                  "TURNSTILE_SITE_KEY":  "0x4AAAAAAFvUt93VBx4gGZD-",
-                 "EMAIL_FROM":  "",
+                 "EMAIL_FROM":  "Circuit and Grain <requests@circuitgrain.shop>",
                  "INBOUND_REQUEST_ADDRESS":  "dnyaneshwar@circuitgrain.shop",
                  "INBOUND_FORWARD_TO":  "insanedk46@gmail.com",
                  "GOOGLE_CLIENT_ID":  "787849098588-ug81abf9bvgfjm67ik7dt7a3kc2psq3p.apps.googleusercontent.com",
