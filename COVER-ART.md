@@ -1,0 +1,6 @@
+# Request form cover
+
+Generated with the built-in image generation tool. Project asset: public/images/private-access-cover.png.
+
+Final prompt:
+Use case: photorealistic-natural. Create a premium editorial cover photograph for Circuit and Grain, a minimal design-led technology and home brand. Landscape 3:2 composition for a full-viewport website backdrop behind a white request-access form placed on the right. A beautiful sculptural brushed dark-metal ribbon/loop resting on a warm travertine plinth, smoked glass and one slender electric chartreuse/lime translucent acrylic slab, in a quiet modern architectural interior with warm pale stone walls, soft afternoon sunlight, crisp long diagonal shadows, subtle analog grain. Objects concentrated on left third, right half quiet pale stone negative space. Sophisticated art direction, real material texture, high-end architectural photography, muted cream grey charcoal palette with one small #dfff32 accent. No text, no letters, no logos, no watermarks, no screens, no UI, no people. Wide enough to crop on mobile. Deliver the photograph only.

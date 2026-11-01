@@ -1,0 +1,45 @@
+{
+    "name":  "cg-admin",
+    "main":  "worker/index.js",
+    "compatibility_date":  "2026-11-01",
+    "workers_dev":  false,
+    "preview_urls":  false,
+    "assets":  {
+                   "directory":  "./dist",
+                   "binding":  "ASSETS",
+                   "run_worker_first":  true,
+                   "not_found_handling":  "single-page-application"
+               },
+    "d1_databases":  [
+                         {
+                             "binding":  "DB",
+                             "database_name":  "circuitgrain-access",
+                             "database_id":  "53695b42-59f9-4e1d-a045-954d7a8e2940",
+                             "migrations_dir":  "schema-upgrades"
+                         }
+                     ],
+    "vars":  {
+                 "ACCESS_TEAM_DOMAIN":  "https://YOUR-TEAM.cloudflareaccess.com",
+                 "ACCESS_AUD":  "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+                 "ADMIN_EMAILS":  "insanedk46@gmail.com",
+                 "TURNSTILE_SITE_KEY":  "",
+                 "EMAIL_FROM":  "",
+                 "INBOUND_REQUEST_ADDRESS":  "dnyaneshwar@circuitgrain.shop",
+                 "INBOUND_FORWARD_TO":  "insanedk46@gmail.com"
+             },
+    "triggers":  {
+                     "crons":  [
+                                   "*/5 * * * *"
+                               ]
+                 },
+    "routes":  [
+                   {
+                       "custom_domain":  true,
+                       "pattern":  "admin.circuitgrain.shop"
+                   },
+                   {
+                       "custom_domain":  true,
+                       "pattern":  "request.circuitgrain.shop"
+                   }
+               ]
+}
