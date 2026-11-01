@@ -1,28 +1,16 @@
 import { saveDecision } from './approvalAccess.js';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { authenticateAdmin, handleGoogleAuth } from './googleAuth.js';
 import { canTransition } from '../src/utils/workflow.js';
 import { handlePublicRequest, retryNotifications } from './publicRequests.js';
 import { handleIncomingEmail } from './incomingEmail.js';
 import { dashboardRecord, historyRecord, displayStatus } from './requestStorage.js';
-const keySets = new Map();
 const json = (value, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
-async function authenticate(request, env) {
-  if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD || !env.ADMIN_EMAILS) throw new Error('CONFIG');
-  const issuer = new URL(env.ACCESS_TEAM_DOMAIN).origin;
-  if (!issuer.endsWith('.cloudflareaccess.com') || !issuer.startsWith('https://')) throw new Error('CONFIG');
-  if (!keySets.has(issuer)) keySets.set(issuer, createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`)));
-  const token = request.headers.get('Cf-Access-Jwt-Assertion');
-  if (!token) throw new Error('AUTH');
-  const { payload } = await jwtVerify(token, keySets.get(issuer), { issuer, audience: env.ACCESS_AUD, algorithms: ['RS256'], requiredClaims: ['exp','iat','sub','email'] });
-  const admins = env.ADMIN_EMAILS.split(',').map(email => email.trim().toLowerCase()).filter(Boolean);
-  if (typeof payload.email !== 'string' || !admins.includes(payload.email.toLowerCase())) throw new Error('FORBIDDEN');
-  return payload.email;
-}
 export default {
  async email(message,env,ctx) { await handleIncomingEmail(message,env,ctx); },
  async scheduled(event,env,ctx) { ctx.waitUntil(retryNotifications(env)); },
  async fetch(request, env, ctx) {
   const url = new URL(request.url);
+  if (url.pathname.startsWith('/auth/')) return handleGoogleAuth(request,env);
   if (url.pathname.startsWith('/public-api/')) return handlePublicRequest(request,env,ctx);
   if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/auth/')) {
    if (!['GET','HEAD'].includes(request.method)) return json({error:'Method not allowed.'},405);
@@ -33,10 +21,8 @@ export default {
    return new Response(response.body,{status:response.status,headers});
   }
   let actor;
-  try { actor = await authenticate(request, env); }
-  catch(error) { return json({ error: error.message === 'CONFIG' ? 'Cloudflare Access is not configured.' : error.message === 'FORBIDDEN' ? 'Administrator access is required.' : 'Sign in through Cloudflare Access to continue.' }, error.message === 'CONFIG' ? 503 : error.message === 'FORBIDDEN' ? 403 : 401); }
-  if (url.pathname === '/auth/login' && request.method === 'GET') return new Response(null, {status:302,headers:{Location:'/', 'Cache-Control':'no-store'}});
-  if (url.pathname.startsWith('/auth/')) return json({error:'Not found.'},404);
+  try { actor = await authenticateAdmin(request, env); }
+  catch(error) { return json({ error: error.message === 'CONFIG' ? 'Google sign-in is not configured yet.' : error.message === 'FORBIDDEN' ? 'Administrator access is required.' : 'Sign in with Google to continue.' }, error.message === 'CONFIG' ? 503 : error.message === 'FORBIDDEN' ? 403 : 401); }
   if (url.pathname === '/api/session' && request.method === 'GET') return json({user:{email:actor}});
   if (!env.DB) return json({ error:'D1 database is not configured.' },503);
   try {

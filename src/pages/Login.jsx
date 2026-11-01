@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
-import { startGoogleSignIn } from '../services/sessionService.js';
+import { startGoogleSignIn, getSignInError } from '../services/sessionService.js';
 
-export default function Login({ error }) {
+export default function Login({ error }) { const signInError=error || getSignInError();
 
   const [busy, setBusy] = useState(false);
   function submit(event) {
@@ -18,7 +18,7 @@ export default function Login({ error }) {
         {busy ? 'Redirecting…' : 'Sign in with Google'}
       </button>
       <p className="login-access-note">Access is limited to authorised administrators.</p>
-      {error && <p className="login-message" role="alert">{error}</p>}
+      {signInError && <p className="login-message" role="alert">{signInError}</p>}
     </form>
     <footer className="login-footer">Circuit and Grain <a href="https://request.circuitgrain.shop">Request access</a></footer>
   </div></main><footer className="access-footer"><span>&copy; {new Date().getFullYear()} Circuit and Grain</span><span>Thoughtfully selected. Personally reviewed.</span></footer></div>;

@@ -14,5 +14,5 @@ export default function AuthGate() {
   }, []);
   if (loading) return <div className="session-loading" role="status">Checking your session…</div>;
   if (!authenticated) return <Login error={error}/>;
-  return <Dashboard onSignOut={() => { signOut(); setAuthenticated(false); setError(''); }}/ >;
+  return <Dashboard onSignOut={async () => { try { await signOut(); setError(''); } catch(err) { setError(err.message); } finally { setAuthenticated(false); } }}/ >;
 }

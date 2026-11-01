@@ -6,14 +6,18 @@ export async function getSession() {
     try { message = (await response.json()).error || message; } catch {}
     throw new Error(message);
   }
-  // A frontend-only preview may serve index.html for API paths. It is not a session.
   if (!response.headers.get('Content-Type')?.includes('application/json')) return false;
   let session;
   try { session = await response.json(); } catch { return false; }
-  // The Worker verifies the identity and ADMIN_EMAILS before returning this endpoint.
   return typeof session?.user?.email === 'string' && session.user.email.length > 0;
 }
+export function getSignInError() {
+  const code = new URLSearchParams(window.location.search).get('auth_error');
+  return ({not_configured:'Google sign-in is not configured yet.',not_allowed:'This Google account does not have administrator access.',expired:'Your sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled. Please try again.',failed:'Unable to complete Google sign-in. Please try again.'})[code] || '';
+}
 export function startGoogleSignIn() { window.location.assign('/auth/login'); }
-export function signOut() {
-  window.location.assign('/cdn-cgi/access/logout');
+export async function signOut() {
+  const response=await fetch('/auth/logout',{method:'POST',credentials:'same-origin'});
+  if(!response.ok)throw new Error('Unable to sign out. Please try again.');
+  window.location.assign('/');
 }
